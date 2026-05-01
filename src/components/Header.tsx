@@ -1,22 +1,16 @@
-import { Menu, Search, ShoppingBag, UserRound, X } from "lucide-react";
+import { Search, ShoppingBag, X } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { getCurrentSession } from "../data/localSession";
+import { Link, useLocation } from "react-router-dom";
+import { useCurrentMember } from "../hooks/useCurrentMember";
 
 export function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const session = getCurrentSession();
+  useLocation();
+  const { data: member } = useCurrentMember();
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-hairline bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-4 sm:px-6">
-        <button
-          className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-soft"
-          aria-label="메뉴 열기"
-        >
-          <Menu size={22} strokeWidth={1.8} />
-        </button>
-
+      <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-end px-4 sm:px-6">
         <Link
           to="/"
           className="absolute left-1/2 -translate-x-1/2 text-[22px] font-semibold tracking-[0.18em]"
@@ -36,18 +30,22 @@ export function Header() {
             <Search size={21} strokeWidth={1.8} />
           </button>
           <Link
-            to={session ? "/mypage" : "/login"}
-            className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-soft"
-            aria-label={session ? "마이페이지" : "로그인"}
-          >
-            <UserRound size={20} strokeWidth={1.8} />
-          </Link>
-          <Link
             to="/cart"
             className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-soft"
             aria-label="장바구니"
           >
             <ShoppingBag size={21} strokeWidth={1.8} />
+          </Link>
+          <Link
+            to={member ? "/mypage" : "/login"}
+            className={`flex h-9 min-w-[84px] items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors ${
+              member
+                ? "bg-ink text-white hover:bg-body"
+                : "bg-accent text-white hover:bg-[#e83052]"
+            }`}
+            aria-label={member ? "마이페이지" : "로그인"}
+          >
+            {member ? "마이페이지" : "Login"}
           </Link>
         </div>
       </div>

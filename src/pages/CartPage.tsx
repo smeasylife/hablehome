@@ -1,18 +1,15 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, ShoppingBag } from "lucide-react";
-import { getCartItems, removeSelectedCartItems } from "../api/cart";
-import {
-  getLocalCartItems,
-  removeLocalCartItems,
-} from "../data/localCart";
+import { getCartItems } from "../api/cart";
 import type { CartItemResponse } from "../types/cart";
+import type { OrderPageState } from "../types/order";
 
 const currencyFormatter = new Intl.NumberFormat("ko-KR");
 
 export function CartPage() {
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedCartIds, setSelectedCartIds] = useState<number[]>([]);
   const [message, setMessage] = useState("");
 
@@ -21,7 +18,7 @@ export function CartPage() {
     queryFn: getCartItems,
   });
 
-  const cartItems: CartItemResponse[] = data ?? getLocalCartItems();
+  const cartItems: CartItemResponse[] = data ?? [];
 
   const selectedIdSet = useMemo(
     () => new Set(selectedCartIds),
@@ -29,26 +26,11 @@ export function CartPage() {
   );
   const selectedItems = cartItems.filter((item) => selectedIdSet.has(item.cartId));
   const selectedTotal = selectedItems.reduce(
-    (total, item) => total + item.salePrice,
+    (total, item) => total + item.salePrice * item.quantity,
     0,
   );
   const allSelected =
     cartItems.length > 0 && selectedCartIds.length === cartItems.length;
-
-  const removeMutation = useMutation({
-    mutationFn: removeSelectedCartItems,
-    onSuccess: () => {
-      setMessage("선택한 상품을 구매 처리하고 장바구니에서 제거했습니다.");
-      setSelectedCartIds([]);
-      queryClient.invalidateQueries({ queryKey: ["cart"] });
-    },
-    onError: (_error, cartIds) => {
-      removeLocalCartItems(cartIds);
-      setMessage("선택한 상품을 구매 처리하고 장바구니에서 제거했습니다.");
-      setSelectedCartIds([]);
-      queryClient.invalidateQueries({ queryKey: ["cart"] });
-    },
-  });
 
   const toggleItem = (cartId: number) => {
     setMessage("");
@@ -70,7 +52,20 @@ export function CartPage() {
       return;
     }
 
-    removeMutation.mutate(selectedCartIds);
+    const state: OrderPageState = {
+      cartIds: selectedCartIds,
+      previewItems: selectedItems.map((item) => ({
+        itemId: item.itemId,
+        name: item.name,
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+        unitPrice: item.salePrice,
+        pictureUrl: item.pictureUrl,
+      })),
+    };
+
+    navigate("/order", { state });
   };
 
   return (
@@ -105,7 +100,7 @@ export function CartPage() {
       ) : null}
       {isError ? (
         <p className="mt-4 text-sm text-muted">
-          API 연결 전까지 이 브라우저에 담은 상품을 표시합니다.
+          장바구니를 불러오지 못했습니다. 로그인 상태와 백엔드 API 연결을 확인해 주세요.
         </p>
       ) : null}
 
@@ -164,7 +159,7 @@ export function CartPage() {
                       {item.name}
                     </Link>
                     <p className="mt-2 text-sm text-muted">
-                      색상 {item.color} · 사이즈 {item.size}
+                      색상 {item.color} · 사이즈 {item.size} · 수량 {item.quantity}개
                     </p>
                     <div className="mt-4 flex flex-wrap items-baseline gap-2">
                       {item.price > item.salePrice ? (
@@ -173,7 +168,7 @@ export function CartPage() {
                         </span>
                       ) : null}
                       <span className="text-lg font-semibold text-ink">
-                        {currencyFormatter.format(item.salePrice)}원
+                        {currencyFormatter.format(item.salePrice * item.quantity)}원
                       </span>
                     </div>
                   </div>
@@ -187,7 +182,9 @@ export function CartPage() {
             <div className="mt-5 space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted">선택 상품</span>
-                <span className="font-medium text-ink">{selectedItems.length}개</span>
+              <span className="font-medium text-ink">
+                {selectedItems.reduce((total, item) => total + item.quantity, 0)}개
+              </span>
               </div>
               <div className="flex justify-between border-t border-hairline pt-4 text-base">
                 <span className="font-semibold text-ink">총 상품 금액</span>
@@ -204,7 +201,6 @@ export function CartPage() {
             <button
               type="button"
               onClick={purchaseSelectedItems}
-              disabled={removeMutation.isPending}
               className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-ink px-5 text-sm font-semibold text-white disabled:bg-muted"
             >
               <ShoppingBag size={18} />

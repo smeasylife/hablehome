@@ -6,6 +6,7 @@ export type ItemListResponse = {
   color: string;
   pictureUrl: string;
   like: boolean;
+  categories?: string[];
 };
 
 export type ItemPictureResponse = {
@@ -54,6 +55,8 @@ export type ItemDetailResponse = {
   color: string;
   information: string;
   itemPictures: ItemPictureResponse[];
+  categories?: string[];
+  like: boolean;
   reviews: ReviewResponse[];
   questions: QuestionResponse[];
 };
@@ -61,4 +64,5 @@ export type ItemDetailResponse = {
 export type Category = {
   id: string;
   label: string;
+  categoryNames: string[];
 };

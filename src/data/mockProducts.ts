@@ -1,13 +1,4 @@
-import type { Category, ItemListResponse } from "../types/item";
-
-export const categories: Category[] = [
-  { id: "NEW", label: "NEW" },
-  { id: "BEST", label: "BEST" },
-  { id: "SALE", label: "SALE" },
-  { id: "SPRING_FALL", label: "봄/가을" },
-  { id: "SUMMER", label: "여름" },
-  { id: "WINTER", label: "겨울" },
-];
+import type { ItemListResponse } from "../types/item";
 
 export const mockProducts: ItemListResponse[] = [
   {

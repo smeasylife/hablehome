@@ -1,8 +1,11 @@
 import { apiClient } from "./client";
-import type { CartItemResponse } from "../types/cart";
+import type { CartItemRequest, CartItemResponse } from "../types/cart";
 
-export async function addCartItem(itemId: number): Promise<void> {
-  await apiClient.post(`/${itemId}/cart`);
+export async function addCartItem(
+  itemId: number,
+  payload?: CartItemRequest,
+): Promise<void> {
+  await apiClient.post(`/${itemId}/cart`, payload ?? {});
 }
 
 export async function getCartItems(): Promise<CartItemResponse[]> {

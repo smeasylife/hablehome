@@ -1,35 +1,29 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { isAxiosError } from "axios";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Mail, MessageCircle, ShieldCheck } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   kakaoLogin,
+  login,
   sendSignupCode,
   signup,
   verifySignupCode,
 } from "../api/auth";
-import { saveSession } from "../data/localSession";
+import { clearSession } from "../data/localSession";
+import { currentMemberQueryKey } from "../hooks/useCurrentMember";
 
-declare global {
-  interface Window {
-    Kakao?: {
-      init: (key: string) => void;
-      isInitialized: () => boolean;
-      Auth: {
-        authorize: (options: { redirectUri: string }) => void;
-      };
-    };
-  }
-}
-
-const KAKAO_SDK_URL = "https://developers.kakao.com/sdk/js/kakao.js";
-const KAKAO_KEY = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY as
+const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY as
   | string
   | undefined;
+const PASSWORD_POLICY_MESSAGE =
+  "비밀번호는 8자 이상이며 영문자와 숫자를 포함해야 합니다.";
 
 type Mode = "login" | "signup";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -40,18 +34,19 @@ export function LoginPage() {
   const [verificationCode, setVerificationCode] = useState("");
   const [isCodeSent, setIsCodeSent] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [verifiedEmail, setVerifiedEmail] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const hasHandledKakaoCode = useRef(false);
 
+  const normalizedEmail = email.trim();
+  const normalizedNickname = nickname.trim();
+  const isCurrentEmailVerified =
+    isEmailVerified && verifiedEmail === normalizedEmail;
   const passwordsMatch = password.length > 0 && password === passwordConfirm;
-  const canSignup =
-    nickname.trim().length > 0 &&
-    email.trim().length > 0 &&
-    password.length > 0 &&
-    passwordsMatch &&
-    isEmailVerified;
+  const isPasswordValid = isValidSignupPassword(password);
 
   const timerLabel = useMemo(() => {
     const minutes = Math.floor(secondsLeft / 60);
@@ -59,42 +54,34 @@ export function LoginPage() {
     return `${minutes}:${seconds}`;
   }, [secondsLeft]);
 
-  const redirectPath = searchParams.get("redirect") ?? "/mypage";
+  const redirectPath = searchParams.get("redirect") ?? searchParams.get("state") ?? "/mypage";
+  const kakaoRedirectUri =
+    typeof window === "undefined" ? "" : `${window.location.origin}/login`;
+
+  function finishLogin(member: Awaited<ReturnType<typeof login>>) {
+    clearSession();
+    queryClient.setQueryData(currentMemberQueryKey, member);
+    queryClient.invalidateQueries({ queryKey: ["items"] });
+    queryClient.invalidateQueries({ queryKey: ["item"] });
+    navigate(redirectPath, { replace: true });
+  }
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code");
-    if (!code) {
+    if (!code || hasHandledKakaoCode.current) {
       return;
     }
+    hasHandledKakaoCode.current = true;
 
-    kakaoLogin(code)
-      .then((responseMessage) => {
-        saveSession({
-          memberId: 1,
-          nickname: "카카오회원",
-          email: "kakao@hable.local",
-        });
-        setMessage(responseMessage);
-        window.history.replaceState({}, "", redirectPath);
-        navigate(redirectPath, { replace: true });
+    kakaoLogin({ code, redirectUri: kakaoRedirectUri })
+      .then((member) => {
+        window.history.replaceState({}, "", "/login");
+        finishLogin(member);
       })
-      .catch(() => setError("카카오 로그인 처리에 실패했습니다."));
-  }, [navigate, redirectPath]);
-
-  useEffect(() => {
-    if (!KAKAO_KEY || window.Kakao) {
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = KAKAO_SDK_URL;
-    script.async = true;
-    document.head.appendChild(script);
-
-    return () => {
-      script.remove();
-    };
-  }, []);
+      .catch((caughtError) =>
+        setError(getRequestErrorMessage(caughtError, "카카오 로그인 처리에 실패했습니다.")),
+      );
+  }, [kakaoRedirectUri, navigate, redirectPath]);
 
   useEffect(() => {
     if (!secondsLeft || isEmailVerified) {
@@ -114,13 +101,20 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const responseMessage = await sendSignupCode(email);
+      const responseMessage = await sendSignupCode(normalizedEmail);
       setIsCodeSent(true);
       setIsEmailVerified(false);
+      setVerifiedEmail("");
       setSecondsLeft(300);
-      setMessage(responseMessage);
-    } catch {
-      setError("인증 번호를 전송하지 못했습니다.");
+      setVerificationCode("");
+      setMessage(`${responseMessage}. 메일함에서 6자리 인증번호를 확인해 주세요.`);
+    } catch (caughtError) {
+      setError(
+        getRequestErrorMessage(
+          caughtError,
+          "인증 번호 전송 응답이 지연되고 있습니다. 메일함을 확인해 주세요.",
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -133,14 +127,20 @@ export function LoginPage() {
 
     try {
       const responseMessage = await verifySignupCode({
-        email,
+        email: normalizedEmail,
         code: verificationCode,
       });
       setIsEmailVerified(true);
+      setVerifiedEmail(normalizedEmail);
       setSecondsLeft(0);
       setMessage(responseMessage);
-    } catch {
-      setError("인증 번호가 올바르지 않거나 만료되었습니다.");
+    } catch (caughtError) {
+      setError(
+        getRequestErrorMessage(
+          caughtError,
+          "인증 번호가 올바르지 않거나 만료되었습니다.",
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -151,53 +151,74 @@ export function LoginPage() {
     setError("");
     setMessage("");
 
+    if (!normalizedNickname || !normalizedEmail || !password || !phoneNumber) {
+      setError("회원가입 정보를 모두 입력해 주세요.");
+      return;
+    }
+
+    if (!isPasswordValid) {
+      setError(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+
     if (!passwordsMatch) {
       setError("비밀번호가 일치하지 않습니다.");
       return;
     }
 
-    if (!isEmailVerified) {
+    if (!isCurrentEmailVerified) {
       setError("이메일 인증을 완료해 주세요.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await signup({ nickname, email, password, phoneNumber });
-      setMessage("회원가입이 완료되었습니다.");
-      setMode("login");
-    } catch {
-      setError("회원가입에 실패했습니다.");
+      await signup({
+        nickname: normalizedNickname,
+        email: normalizedEmail,
+        password,
+        phoneNumber,
+      });
+      const member = await login({ email: normalizedEmail, password });
+      finishLogin(member);
+    } catch (caughtError) {
+      setError(getRequestErrorMessage(caughtError, "회원가입에 실패했습니다."));
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  function handleEmailLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleEmailLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    saveSession({
-      memberId: 1,
-      nickname: email.split("@")[0] || "회원",
-      email,
-    });
-    setMessage("로그인되었습니다.");
-    navigate(redirectPath, { replace: true });
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const member = await login({ email, password });
+      finishLogin(member);
+    } catch (caughtError) {
+      setError(getRequestErrorMessage(caughtError, "로그인에 실패했습니다."));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function handleKakaoLogin() {
     setError("");
 
-    if (!KAKAO_KEY) {
-      setError("카카오 JavaScript 키가 설정되지 않았습니다.");
+    if (!KAKAO_REST_API_KEY) {
+      setError("카카오 REST API 키가 설정되지 않았습니다.");
       return;
     }
 
-    const redirectUri = `${window.location.origin}/login`;
-    if (window.Kakao && !window.Kakao.isInitialized()) {
-      window.Kakao.init(KAKAO_KEY);
-    }
-    window.Kakao?.Auth.authorize({ redirectUri });
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: KAKAO_REST_API_KEY,
+      redirect_uri: kakaoRedirectUri,
+      state: redirectPath,
+    });
+    window.location.href = `https://kauth.kakao.com/oauth/authorize?${params.toString()}`;
   }
 
   return (
@@ -269,13 +290,15 @@ export function LoginPage() {
             />
             <button
               type="submit"
-              className="h-12 w-full rounded-full bg-ink text-sm font-semibold text-white"
+              disabled={!email || !password || isSubmitting}
+              className="flex h-12 w-full items-center justify-center rounded-full bg-ink text-sm font-semibold text-white disabled:bg-hairline"
             >
-              이메일로 로그인
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : "이메일로 로그인"}
             </button>
             <button
               type="button"
               onClick={handleKakaoLogin}
+              disabled={isSubmitting}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] text-sm font-semibold text-[#191919]"
             >
               <MessageCircle size={18} />
@@ -288,14 +311,16 @@ export function LoginPage() {
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <Field
                 label="이메일"
-                type="email"
-                value={email}
-                onChange={(value) => {
-                  setEmail(value);
-                  setIsEmailVerified(false);
-                }}
-                autoComplete="email"
-              />
+                  type="email"
+                  value={email}
+                  onChange={(value) => {
+                    setEmail(value);
+                    setIsEmailVerified(false);
+                    setVerifiedEmail("");
+                    setMessage("");
+                  }}
+                  autoComplete="email"
+                />
               <button
                 type="button"
                 onClick={handleSendCode}
@@ -334,8 +359,10 @@ export function LoginPage() {
             <Field
               label="휴대폰 번호"
               value={phoneNumber}
-              onChange={setPhoneNumber}
+              onChange={(value) => setPhoneNumber(formatPhoneNumber(value))}
               autoComplete="tel"
+              inputMode="tel"
+              maxLength={13}
             />
             <Field
               label="비밀번호"
@@ -343,6 +370,13 @@ export function LoginPage() {
               value={password}
               onChange={setPassword}
               autoComplete="new-password"
+              status={
+                password.length === 0
+                  ? PASSWORD_POLICY_MESSAGE
+                  : isPasswordValid
+                    ? "사용 가능한 비밀번호입니다."
+                    : PASSWORD_POLICY_MESSAGE
+              }
             />
             <Field
               label="비밀번호 확인"
@@ -360,7 +394,7 @@ export function LoginPage() {
             />
             <button
               type="submit"
-              disabled={!canSignup || isSubmitting}
+              disabled={isSubmitting}
               className="flex h-12 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-white disabled:bg-hairline"
             >
               {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : "가입하기"}
@@ -383,6 +417,35 @@ export function LoginPage() {
   );
 }
 
+function getRequestErrorMessage(error: unknown, fallback: string) {
+  if (
+    isAxiosError<{ message?: string }>(error) &&
+    typeof error.response?.data?.message === "string"
+  ) {
+    return error.response.data.message;
+  }
+
+  return fallback;
+}
+
+function formatPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 3) {
+    return digits;
+  }
+
+  if (digits.length <= 7) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function isValidSignupPassword(value: string) {
+  return value.length >= 8 && value.length <= 64 && /[A-Za-z]/.test(value) && /\d/.test(value);
+}
+
 type FieldProps = {
   label: string;
   value: string;
@@ -390,6 +453,7 @@ type FieldProps = {
   type?: string;
   autoComplete?: string;
   inputMode?: "numeric" | "text" | "email" | "tel";
+  maxLength?: number;
   status?: string;
 };
 
@@ -400,6 +464,7 @@ function Field({
   type = "text",
   autoComplete,
   inputMode,
+  maxLength,
   status,
 }: FieldProps) {
   return (
@@ -413,6 +478,7 @@ function Field({
         value={value}
         autoComplete={autoComplete}
         inputMode={inputMode}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
       />
       {status ? <span className="mt-2 block text-xs text-muted">{status}</span> : null}

@@ -26,57 +26,54 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <Link
       to={`/items/${product.id}`}
-      className="group block rounded-[14px] outline-none transition focus-visible:ring-2 focus-visible:ring-ink"
+      className="group block rounded-md outline-none transition focus-visible:ring-2 focus-visible:ring-ink"
     >
-      <article className="transition group-hover:-translate-y-0.5 group-hover:shadow-soft">
-        <div className="relative aspect-square overflow-hidden rounded-[14px] bg-soft">
+      <article className="overflow-hidden rounded-md bg-[#181a19] transition group-hover:-translate-y-0.5">
+        <div className="relative aspect-[4/5] overflow-hidden bg-soft">
           <img
             src={product.pictureUrl}
             alt={product.name}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
             loading="lazy"
           />
-          {discountRate > 0 ? (
-            <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-accent shadow-soft">
-              {discountRate}% OFF
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/92 shadow-soft"
-            aria-label="좋아요"
-            onClick={(event) => event.preventDefault()}
-          >
+          {product.like ? (
             <Heart
-              size={18}
-              className={product.like ? "fill-accent text-accent" : "text-ink"}
+              aria-label="좋아요한 상품"
+              size={21}
+              strokeWidth={1.8}
+              className="absolute right-3 top-3 fill-red-500 text-red-500 drop-shadow"
             />
-          </button>
+          ) : null}
         </div>
 
-        <div className="px-1 pb-2 pt-3">
-          <div className="flex items-start justify-between gap-2">
-            <h2 className="min-w-0 text-[15px] font-semibold leading-5 text-ink">
-              {product.name}
-            </h2>
+        <div className="px-3 pb-3 pt-2.5 text-white">
+          <h2 className="truncate text-[13px] font-medium leading-5 text-white/90">
+            {product.name}
+          </h2>
+
+          <div className="mt-1 flex min-w-0 items-baseline gap-1.5">
+            {discountRate > 0 ? (
+              <span className="shrink-0 text-[15px] font-bold text-red-500">
+                {discountRate}%
+              </span>
+            ) : null}
+            <span className="shrink-0 text-[15px] font-bold text-white">
+              {currencyFormatter.format(product.salePrice)}원
+            </span>
+            {discountRate > 0 ? (
+              <span className="min-w-0 truncate text-xs text-white/55 line-through">
+                {currencyFormatter.format(product.price)}원
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex items-center gap-1.5">
             <span
-              className="mt-1 h-4 w-4 shrink-0 rounded-full border border-hairline"
+              className="h-2.5 w-2.5 rounded-full border border-white/20"
               style={{ backgroundColor: colorMap[product.color] ?? "#eeeeee" }}
               aria-label={`${product.color} 색상`}
             />
           </div>
-
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            {discountRate > 0 ? (
-              <span className="text-sm text-muted line-through">
-                {currencyFormatter.format(product.price)}원
-              </span>
-            ) : null}
-            <span className="text-[15px] font-semibold text-ink">
-              {currencyFormatter.format(product.salePrice)}원
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-muted">{product.color}</p>
         </div>
       </article>
     </Link>

@@ -6,5 +6,12 @@ export type CartItemResponse = {
   salePrice: number;
   color: string;
   size: string;
+  quantity: number;
   pictureUrl: string;
+};
+
+export type CartItemRequest = {
+  color?: string;
+  size?: string;
+  quantity?: number;
 };

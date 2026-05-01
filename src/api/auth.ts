@@ -1,4 +1,16 @@
-import { apiClient } from "./client";
+import { apiClient, resetCsrfToken } from "./client";
+
+export type AuthMember = {
+  memberId: number;
+  nickname: string;
+  email: string;
+  role: "ROLE_USER" | "ROLE_ADMIN";
+};
+
+export type LoginPayload = {
+  email: string;
+  password: string;
+};
 
 export type SignupPayload = {
   nickname: string;
@@ -12,9 +24,33 @@ export type VerifyCodePayload = {
   code: string;
 };
 
+export type KakaoLoginPayload = {
+  code: string;
+  redirectUri: string;
+};
+
+export async function login(payload: LoginPayload): Promise<AuthMember> {
+  const response = await apiClient.post<AuthMember>("/auth/login", payload);
+  resetCsrfToken();
+
+  return response.data;
+}
+
+export async function getCurrentMember(): Promise<AuthMember> {
+  const response = await apiClient.get<AuthMember>("/auth/me");
+
+  return response.data;
+}
+
+export async function logout(): Promise<void> {
+  await apiClient.post("/auth/logout");
+  resetCsrfToken();
+}
+
 export async function sendSignupCode(email: string): Promise<string> {
   const response = await apiClient.post<string>("/signup/send-code", null, {
     params: { email },
+    timeout: 30000,
   });
 
   return response.data;
@@ -32,8 +68,9 @@ export async function signup(payload: SignupPayload): Promise<void> {
   await apiClient.post("/signup", payload);
 }
 
-export async function kakaoLogin(code: string): Promise<string> {
-  const response = await apiClient.post<string>("/auth/kakao/login", { code });
+export async function kakaoLogin(payload: KakaoLoginPayload): Promise<AuthMember> {
+  const response = await apiClient.post<AuthMember>("/auth/kakao/login", payload);
+  resetCsrfToken();
 
   return response.data;
 }

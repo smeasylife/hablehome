@@ -5,79 +5,28 @@ import {
   Plus,
   ShoppingBag,
   ShoppingCart,
-  TicketPercent,
   Truck,
   X,
 } from "lucide-react";
+import axios from "axios";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addCartItem } from "../api/cart";
-import { getItem } from "../api/items";
+import { getItem, likeItem, unlikeItem } from "../api/items";
 import { ProductReviews } from "../components/ProductReviews";
 import { ProductQuestions } from "../components/ProductQuestions";
 import { ProductSectionTabs } from "../components/ProductSectionTabs";
-import { addLocalCartItem } from "../data/localCart";
-import { getLocalReviews } from "../data/localReviews";
-import { mockProducts } from "../data/mockProducts";
-import type { ItemDetailResponse } from "../types/item";
+import type { ItemDetailResponse, ItemListResponse } from "../types/item";
+import type { OrderPageState } from "../types/order";
 
 const currencyFormatter = new Intl.NumberFormat("ko-KR");
-const AVAILABLE_POINTS = 12000;
-const MAX_POINT_RATE = 0.3;
 const DEFAULT_COLORS = ["White", "Ivory", "Gray", "Beige", "Blue", "Charcoal"];
-const COUPONS = [
-  { id: "none", name: "쿠폰 선택 안 함", discountAmount: 0 },
-  { id: "welcome-5000", name: "신규 회원 5,000원 할인", discountAmount: 5000 },
-  { id: "bedding-10", name: "침구 카테고리 10,000원 할인", discountAmount: 10000 },
-];
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
 });
-
-function toMockDetail(itemId: number): ItemDetailResponse | undefined {
-  const product = mockProducts.find((item) => item.id === itemId);
-
-  if (!product) {
-    return undefined;
-  }
-
-  return {
-    itemId: product.id,
-    name: product.name,
-    price: product.price,
-    salePrice: product.salePrice,
-    shippingPrice: 3000,
-    size: "SS/Q/K",
-    color: product.color,
-    information:
-      "부드러운 촉감과 안정적인 보온감을 중심으로 구성한 침구 상품입니다. 일상 세탁과 계절별 사용을 고려해 실용적인 소재와 차분한 색감을 적용했습니다.",
-    itemPictures: [{ url: product.pictureUrl }],
-    reviews: [
-      {
-        id: 1,
-        nickname: "테스트회원",
-        rating: 5,
-        productOption: "White / Q",
-        imageUrls: [],
-        content: "촉감이 부드럽고 색감이 화면과 비슷해서 만족합니다.",
-        adminComment: null,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    questions: [
-      {
-        id: 1,
-        title: "세탁 문의",
-        content: "세탁기 사용이 가능한가요?",
-        answer: "울 코스 또는 약한 세탁 코스를 권장합니다.",
-        createdAt: new Date().toISOString(),
-      },
-    ],
-  };
-}
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -97,10 +46,9 @@ export function ProductDetailPage() {
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [selectedCouponId, setSelectedCouponId] = useState(COUPONS[0].id);
-  const [pointsInput, setPointsInput] = useState("0");
   const [purchaseError, setPurchaseError] = useState("");
   const [cartMessage, setCartMessage] = useState("");
+  const [likeMessage, setLikeMessage] = useState("");
   const [selectedSectionId, setSelectedSectionId] = useState("info");
   const infoSectionRef = useRef<HTMLElement | null>(null);
   const reviewSectionRef = useRef<HTMLElement | null>(null);
@@ -114,28 +62,8 @@ export function ProductDetailPage() {
     enabled: isValidItemId,
   });
 
-  const product = data ?? (isValidItemId ? toMockDetail(parsedItemId) : undefined);
-  const localReviews = useMemo(() => {
-    if (!isValidItemId) {
-      return [];
-    }
-
-    return getLocalReviews(parsedItemId);
-  }, [isValidItemId, parsedItemId]);
-  const mergedReviews = useMemo(() => {
-    if (!product) {
-      return [];
-    }
-
-    const reviewMap = new Map(
-      [...localReviews, ...product.reviews].map((review) => [
-        `${review.nickname ?? "구매자"}-${review.productOption ?? ""}-${review.rating ?? 5}-${review.content}`,
-        review,
-      ]),
-    );
-
-    return Array.from(reviewMap.values());
-  }, [localReviews, product]);
+  const product = data;
+  const reviews = product?.reviews ?? [];
   const mainPicture = product?.itemPictures[0]?.url ?? "";
   const colorOptions = useMemo(() => {
     if (!product) {
@@ -154,32 +82,78 @@ export function ProductDetailPage() {
       .map((size) => size.trim())
       .filter(Boolean);
   }, [product]);
-  const selectedCoupon =
-    COUPONS.find((coupon) => coupon.id === selectedCouponId) ?? COUPONS[0];
-  const rawPoints = Number(pointsInput.replace(/,/g, ""));
-  const usedPoints = Number.isFinite(rawPoints) && rawPoints > 0 ? Math.floor(rawPoints) : 0;
   const subtotal = product ? product.salePrice * quantity : 0;
-  const maxUsablePoints = Math.min(AVAILABLE_POINTS, Math.floor(subtotal * MAX_POINT_RATE));
-  const couponDiscount = Math.min(selectedCoupon.discountAmount, subtotal);
-  const pointDiscount = Math.min(usedPoints, maxUsablePoints, subtotal - couponDiscount);
-  const orderTotal = Math.max(0, subtotal - couponDiscount - pointDiscount);
   const discountRate =
     product && product.price > product.salePrice
       ? Math.round(((product.price - product.salePrice) / product.price) * 100)
       : 0;
 
   const addCartMutation = useMutation({
-    mutationFn: addCartItem,
+    mutationFn: ({
+      itemId,
+      color,
+      size,
+      quantity,
+    }: {
+      itemId: number;
+      color?: string;
+      size?: string;
+      quantity?: number;
+    }) => addCartItem(itemId, { color, size, quantity }),
     onSuccess: () => {
       setCartMessage("장바구니에 담았습니다.");
       queryClient.invalidateQueries({ queryKey: ["cart"] });
     },
-    onError: () => {
-      if (product) {
-        addLocalCartItem(product);
-        setCartMessage("장바구니에 담았습니다.");
-        queryClient.invalidateQueries({ queryKey: ["cart"] });
+    onError: (error) => {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        navigate("/login");
+        return;
       }
+
+      setCartMessage("장바구니에 담지 못했습니다. 다시 시도해 주세요.");
+    },
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: ({ itemId, liked }: { itemId: number; liked: boolean }) =>
+      liked ? likeItem(itemId) : unlikeItem(itemId),
+    onMutate: async ({ itemId, liked }) => {
+      setLikeMessage("");
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ["item", itemId] }),
+        queryClient.cancelQueries({ queryKey: ["items"] }),
+      ]);
+
+      const previousItem = queryClient.getQueryData<ItemDetailResponse>(["item", itemId]);
+      const previousItems = queryClient.getQueriesData<ItemListResponse[]>({
+        queryKey: ["items"],
+      });
+
+      queryClient.setQueryData<ItemDetailResponse>(["item", itemId], (item) =>
+        item ? { ...item, like: liked } : item,
+      );
+      queryClient.setQueriesData<ItemListResponse[]>({ queryKey: ["items"] }, (items) =>
+        items?.map((item) => (item.id === itemId ? { ...item, like: liked } : item)),
+      );
+
+      return { previousItem, previousItems };
+    },
+    onError: (error, variables, context) => {
+      queryClient.setQueryData(["item", variables.itemId], context?.previousItem);
+      context?.previousItems.forEach(([queryKey, items]) => {
+        queryClient.setQueryData(queryKey, items);
+      });
+
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        navigate("/login");
+        return;
+      }
+
+      setLikeMessage("좋아요 상태를 저장하지 못했습니다.");
+    },
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["item", variables.itemId] });
+      queryClient.invalidateQueries({ queryKey: ["items"] });
     },
   });
 
@@ -189,7 +163,20 @@ export function ProductDetailPage() {
     }
 
     setCartMessage("");
-    addCartMutation.mutate(product.itemId);
+    addCartMutation.mutate({
+      itemId: product.itemId,
+      color: product.color,
+      size: product.size,
+      quantity: 1,
+    });
+  };
+
+  const handleLikeToggle = () => {
+    if (!product) {
+      return;
+    }
+
+    likeMutation.mutate({ itemId: product.itemId, liked: !product.like });
   };
 
   const scrollToSection = (sectionId: string) => {
@@ -228,28 +215,29 @@ export function ProductDetailPage() {
       return;
     }
 
-    if (usedPoints > maxUsablePoints) {
-      setPurchaseError(
-        `포인트는 최대 ${currencyFormatter.format(maxUsablePoints)}P까지 사용할 수 있습니다.`,
-      );
-      return;
-    }
+    const state: OrderPageState = {
+      items: [
+        {
+          itemId: product.itemId,
+          color: selectedColor,
+          size: selectedSize,
+          quantity,
+        },
+      ],
+      previewItems: [
+        {
+          itemId: product.itemId,
+          name: product.name,
+          color: selectedColor,
+          size: selectedSize,
+          quantity,
+          unitPrice: product.salePrice,
+          pictureUrl: product.itemPictures[0]?.url ?? "",
+        },
+      ],
+    };
 
-    const params = new URLSearchParams({
-      itemId: String(product.itemId),
-      name: product.name,
-      color: selectedColor,
-      size: selectedSize,
-      quantity: String(quantity),
-      price: String(product.salePrice),
-      couponId: selectedCoupon.id,
-      couponName: selectedCoupon.name,
-      couponDiscount: String(couponDiscount),
-      points: String(usedPoints),
-      total: String(orderTotal),
-    });
-
-    navigate(`/order?${params.toString()}`);
+    navigate("/order", { state });
   };
 
   useEffect(() => {
@@ -320,8 +308,8 @@ export function ProductDetailPage() {
       </Link>
 
       {isError ? (
-        <p className="mt-4 text-sm text-muted">
-          API 연결 전까지 예시 상세 정보를 표시합니다.
+        <p className="mt-4 rounded-md border border-hairline px-3 py-2 text-sm text-muted">
+          상품 상세 정보를 불러오지 못했습니다. 백엔드 API 연결 상태를 확인해 주세요.
         </p>
       ) : null}
 
@@ -402,10 +390,20 @@ export function ProductDetailPage() {
               <div className="mt-8 grid grid-cols-[52px_1fr] gap-3">
                 <button
                   type="button"
-                  className="flex h-[52px] min-h-[52px] items-center justify-center rounded-md border border-hairline bg-white text-ink"
-                  aria-label="좋아요"
+                  onClick={handleLikeToggle}
+                  disabled={likeMutation.isPending}
+                  className={`flex h-[52px] min-h-[52px] items-center justify-center rounded-md border transition ${
+                    product.like
+                      ? "border-red-200 bg-red-50 text-red-500"
+                      : "border-hairline bg-white text-ink hover:border-ink"
+                  }`}
+                  aria-label={product.like ? "좋아요 취소" : "좋아요"}
+                  aria-pressed={product.like}
                 >
-                  <Heart size={20} />
+                  <Heart
+                    size={20}
+                    className={product.like ? "fill-red-500 text-red-500" : ""}
+                  />
                 </button>
                 <button
                   type="button"
@@ -420,6 +418,11 @@ export function ProductDetailPage() {
               {cartMessage ? (
                 <p className="mt-3 rounded-md bg-soft px-3 py-2 text-sm text-body">
                   {cartMessage}
+                </p>
+              ) : null}
+              {likeMessage ? (
+                <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {likeMessage}
                 </p>
               ) : null}
               <button
@@ -442,7 +445,7 @@ export function ProductDetailPage() {
             <ProductSectionTabs
               tabs={[
                 { id: "info", label: "상품 정보" },
-                { id: "review", label: `리뷰 ${mergedReviews.length}` },
+                { id: "review", label: `리뷰 ${reviews.length}` },
                 { id: "qna", label: `Q&A ${product.questions.length}` },
               ]}
               selectedId={selectedSectionId}
@@ -464,7 +467,7 @@ export function ProductDetailPage() {
                 ref={reviewSectionRef}
                 className="scroll-mt-[140px] py-10"
               >
-                <ProductReviews reviews={mergedReviews} formatDate={formatDate} />
+                <ProductReviews reviews={reviews} formatDate={formatDate} />
               </section>
 
               <section
@@ -581,47 +584,6 @@ export function ProductDetailPage() {
                     </div>
                   </section>
 
-                  <section>
-                    <label htmlFor="purchase-coupon" className="text-sm font-semibold text-ink">
-                      쿠폰
-                    </label>
-                    <div className="mt-3 flex items-center gap-3">
-                      <TicketPercent size={18} className="shrink-0 text-muted" />
-                      <select
-                        id="purchase-coupon"
-                        value={selectedCouponId}
-                        onChange={(event) => setSelectedCouponId(event.target.value)}
-                        className="h-11 min-w-0 flex-1 rounded-md border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-ink"
-                      >
-                        {COUPONS.map((coupon) => (
-                          <option key={coupon.id} value={coupon.id}>
-                            {coupon.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </section>
-
-                  <section>
-                    <label htmlFor="purchase-points" className="text-sm font-semibold text-ink">
-                      포인트
-                    </label>
-                    <input
-                      id="purchase-points"
-                      inputMode="numeric"
-                      value={pointsInput}
-                      onChange={(event) => {
-                        setPointsInput(event.target.value.replace(/[^\d,]/g, ""));
-                        setPurchaseError("");
-                      }}
-                      className="mt-3 h-11 w-full rounded-md border border-hairline px-3 text-sm text-ink outline-none focus:border-ink"
-                    />
-                    <p className="mt-2 text-xs text-muted">
-                      보유 {currencyFormatter.format(AVAILABLE_POINTS)}P · 최대 사용{" "}
-                      {currencyFormatter.format(maxUsablePoints)}P
-                    </p>
-                  </section>
-
                   <section className="space-y-2 rounded-md bg-soft p-4 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted">상품 금액</span>
@@ -629,22 +591,10 @@ export function ProductDetailPage() {
                         {currencyFormatter.format(subtotal)}원
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted">쿠폰 할인</span>
-                      <span className="font-medium text-ink">
-                        -{currencyFormatter.format(couponDiscount)}원
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted">포인트 사용</span>
-                      <span className="font-medium text-ink">
-                        -{currencyFormatter.format(pointDiscount)}원
-                      </span>
-                    </div>
                     <div className="flex justify-between border-t border-hairline pt-3 text-base">
-                      <span className="font-semibold text-ink">결제 예정 금액</span>
+                      <span className="font-semibold text-ink">주문서 상품 금액</span>
                       <span className="font-semibold text-accent">
-                        {currencyFormatter.format(orderTotal)}원
+                        {currencyFormatter.format(subtotal)}원
                       </span>
                     </div>
                   </section>

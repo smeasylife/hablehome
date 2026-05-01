@@ -45,6 +45,7 @@ export function addLocalCartItem(product: ItemDetailResponse) {
       salePrice: product.salePrice,
       color: product.color,
       size: product.size,
+      quantity: 1,
       pictureUrl: product.itemPictures[0]?.url ?? "",
     },
     ...items,

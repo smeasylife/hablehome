@@ -7,11 +7,11 @@ import {
   type PurchasedProduct,
   markPurchaseReviewed,
 } from "../data/localPurchases";
-import type { UserSession } from "../data/localSession";
+import type { AuthMember } from "../api/auth";
 
 type PurchaseReviewComposerProps = {
   purchase: PurchasedProduct;
-  session: UserSession;
+  session: AuthMember;
 };
 
 export function PurchaseReviewComposer({

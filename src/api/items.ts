@@ -18,3 +18,11 @@ export async function getItem(itemId: number): Promise<ItemDetailResponse> {
 export async function createReview(itemId: number, payload: ReviewRequest): Promise<void> {
   await apiClient.post(`/${itemId}/review`, payload);
 }
+
+export async function likeItem(itemId: number): Promise<void> {
+  await apiClient.post(`/${itemId}/like`);
+}
+
+export async function unlikeItem(itemId: number): Promise<void> {
+  await apiClient.delete(`/${itemId}/like`);
+}
