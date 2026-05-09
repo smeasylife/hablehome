@@ -28,7 +28,7 @@ export function ProductCard({ product }: ProductCardProps) {
       to={`/items/${product.id}`}
       className="group block rounded-md outline-none transition focus-visible:ring-2 focus-visible:ring-ink"
     >
-      <article className="overflow-hidden rounded-md bg-[#181a19] transition group-hover:-translate-y-0.5">
+      <article className="overflow-hidden rounded-md border border-hairline bg-white transition group-hover:-translate-y-0.5">
         <div className="relative aspect-[4/5] overflow-hidden bg-soft">
           <img
             src={product.pictureUrl}
@@ -46,8 +46,8 @@ export function ProductCard({ product }: ProductCardProps) {
           ) : null}
         </div>
 
-        <div className="px-3 pb-3 pt-2.5 text-white">
-          <h2 className="truncate text-[13px] font-medium leading-5 text-white/90">
+        <div className="px-3 pb-3 pt-2.5">
+          <h2 className="truncate text-[13px] font-medium leading-5 text-ink">
             {product.name}
           </h2>
 
@@ -57,11 +57,11 @@ export function ProductCard({ product }: ProductCardProps) {
                 {discountRate}%
               </span>
             ) : null}
-            <span className="shrink-0 text-[15px] font-bold text-white">
+            <span className="shrink-0 text-[15px] font-bold text-ink">
               {currencyFormatter.format(product.salePrice)}원
             </span>
             {discountRate > 0 ? (
-              <span className="min-w-0 truncate text-xs text-white/55 line-through">
+              <span className="min-w-0 truncate text-xs text-muted line-through">
                 {currencyFormatter.format(product.price)}원
               </span>
             ) : null}
@@ -69,7 +69,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
           <div className="mt-2 flex items-center gap-1.5">
             <span
-              className="h-2.5 w-2.5 rounded-full border border-white/20"
+              className="h-2.5 w-2.5 rounded-full border border-hairline"
               style={{ backgroundColor: colorMap[product.color] ?? "#eeeeee" }}
               aria-label={`${product.color} 색상`}
             />

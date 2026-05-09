@@ -1,22 +1,40 @@
 import { Search, ShoppingBag, X } from "lucide-react";
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { type FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useCurrentMember } from "../hooks/useCurrentMember";
 
 export function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  useLocation();
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const navigate = useNavigate();
   const { data: member } = useCurrentMember();
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedKeyword = searchKeyword.trim();
+    if (!trimmedKeyword) {
+      return;
+    }
+
+    navigate(`/search?keyword=${encodeURIComponent(trimmedKeyword)}`);
+    setSearchKeyword(trimmedKeyword);
+    setIsSearchOpen(false);
+  };
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-hairline bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-end px-4 sm:px-6">
         <Link
           to="/"
-          className="absolute left-1/2 -translate-x-1/2 text-[22px] font-semibold tracking-[0.18em]"
+          className="absolute left-1/2 -translate-x-1/2 text-[25px] font-bold leading-none tracking-normal text-ink"
+          style={{
+            fontFamily:
+              '"Airbnb Cereal VF", Circular, "Avenir Next", ui-rounded, system-ui, sans-serif',
+          }}
           aria-label="Hable 홈"
         >
-          HABLE
+          hable
         </Link>
 
         <div className="flex items-center gap-1">
@@ -41,7 +59,7 @@ export function Header() {
             className={`flex h-9 min-w-[84px] items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors ${
               member
                 ? "bg-ink text-white hover:bg-body"
-                : "bg-accent text-white hover:bg-[#e83052]"
+                : "bg-ink text-white hover:bg-body"
             }`}
             aria-label={member ? "마이페이지" : "로그인"}
           >
@@ -52,12 +70,17 @@ export function Header() {
 
       {isSearchOpen ? (
         <div className="border-t border-hairline bg-white">
-          <form className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 sm:px-6">
+          <form
+            className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 sm:px-6"
+            onSubmit={handleSearchSubmit}
+          >
             <Search size={20} strokeWidth={1.8} className="shrink-0 text-muted" />
             <input
               type="search"
               autoFocus
-              placeholder="상품명, 색상, 카테고리 검색"
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              placeholder="상품명 검색"
               className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-muted"
             />
             <button
