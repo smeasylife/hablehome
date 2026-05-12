@@ -24,10 +24,10 @@ export function Header() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-hairline bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-end px-4 sm:px-6">
+      <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:h-[72px] sm:justify-end sm:px-6">
         <Link
           to="/"
-          className="absolute left-1/2 -translate-x-1/2 text-[25px] font-bold leading-none tracking-normal text-ink"
+          className="shrink-0 text-[22px] font-bold leading-none tracking-normal text-ink sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-[25px]"
           style={{
             fontFamily:
               '"Airbnb Cereal VF", Circular, "Avenir Next", ui-rounded, system-ui, sans-serif',
@@ -37,10 +37,10 @@ export function Header() {
           hable
         </Link>
 
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center gap-1">
           <button
             type="button"
-            className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-soft"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:bg-soft sm:h-11 sm:w-11"
             aria-label="상품 검색"
             aria-expanded={isSearchOpen}
             onClick={() => setIsSearchOpen((isOpen) => !isOpen)}
@@ -49,14 +49,14 @@ export function Header() {
           </button>
           <Link
             to="/cart"
-            className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-soft"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:bg-soft sm:h-11 sm:w-11"
             aria-label="장바구니"
           >
             <ShoppingBag size={21} strokeWidth={1.8} />
           </Link>
           <Link
             to={member ? "/mypage" : "/login"}
-            className={`flex h-9 min-w-[84px] items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors ${
+            className={`flex h-10 min-w-[74px] shrink-0 items-center justify-center rounded-full px-3 text-sm font-semibold transition-colors sm:h-9 sm:min-w-[84px] sm:px-4 ${
               member
                 ? "bg-ink text-white hover:bg-body"
                 : "bg-ink text-white hover:bg-body"

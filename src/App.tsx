@@ -14,7 +14,7 @@ export default function App() {
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
       <Header />
-      <main className="flex-1 pt-[73px]">
+      <main className="flex-1 pt-[65px] sm:pt-[73px]">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/search" element={<SearchResultPage />} />

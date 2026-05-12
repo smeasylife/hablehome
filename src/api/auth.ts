@@ -1,4 +1,4 @@
-import { apiClient, resetCsrfToken } from "./client";
+import { apiClient, refreshCsrfToken, resetCsrfToken } from "./client";
 
 export type AuthMember = {
   memberId: number;
@@ -31,7 +31,7 @@ export type KakaoLoginPayload = {
 
 export async function login(payload: LoginPayload): Promise<AuthMember> {
   const response = await apiClient.post<AuthMember>("/auth/login", payload);
-  resetCsrfToken();
+  await refreshCsrfToken();
 
   return response.data;
 }
@@ -70,7 +70,7 @@ export async function signup(payload: SignupPayload): Promise<void> {
 
 export async function kakaoLogin(payload: KakaoLoginPayload): Promise<AuthMember> {
   const response = await apiClient.post<AuthMember>("/auth/kakao/login", payload);
-  resetCsrfToken();
+  await refreshCsrfToken();
 
   return response.data;
 }

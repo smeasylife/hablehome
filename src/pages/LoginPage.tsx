@@ -10,6 +10,7 @@ import {
   signup,
   verifySignupCode,
 } from "../api/auth";
+import { ensureCsrfToken } from "../api/client";
 import { clearSession } from "../data/localSession";
 import { currentMemberQueryKey } from "../hooks/useCurrentMember";
 
@@ -65,6 +66,12 @@ export function LoginPage() {
     queryClient.invalidateQueries({ queryKey: ["item"] });
     navigate(redirectPath, { replace: true });
   }
+
+  useEffect(() => {
+    void ensureCsrfToken().catch(() => {
+      // The login request interceptor will retry token issuance when the user submits.
+    });
+  }, []);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code");
