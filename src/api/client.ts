@@ -19,7 +19,19 @@ type RetriableRequestConfig = InternalAxiosRequestConfig & {
   _csrfRetry?: boolean;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://hablehome.store";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+
+export function resolveApiAssetUrl(url?: string | null) {
+  if (!url) {
+    return "";
+  }
+
+  if (/^(https?:)?\/\//.test(url) || url.startsWith("data:") || url.startsWith("blob:")) {
+    return url;
+  }
+
+  return new URL(url, API_BASE_URL).toString();
+}
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

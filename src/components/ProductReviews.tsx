@@ -1,5 +1,6 @@
 import { Star } from "lucide-react";
 import { useState } from "react";
+import { resolveApiAssetUrl } from "../api/client";
 import type { ReviewResponse } from "../types/item";
 
 const REVIEW_PREVIEW_LENGTH = 120;
@@ -74,7 +75,7 @@ export function ProductReviews({ reviews, formatDate }: ProductReviewsProps) {
                         className="aspect-square overflow-hidden rounded-md bg-soft"
                       >
                         <img
-                          src={url}
+                          src={resolveApiAssetUrl(url)}
                           alt={`리뷰 이미지 ${imageIndex + 1}`}
                           className="h-full w-full object-cover"
                         />

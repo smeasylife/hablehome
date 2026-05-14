@@ -13,6 +13,15 @@ export type ItemPictureResponse = {
   url: string;
 };
 
+export type ItemOptionResponse = {
+  optionId: number;
+  color: string;
+  size: string;
+  stockQuantity: number;
+  additionalPrice: number;
+  soldOut: boolean;
+};
+
 export type ReviewResponse = {
   id?: number;
   nickname?: string;
@@ -55,6 +64,7 @@ export type ItemDetailResponse = {
   color: string;
   information: string;
   itemPictures: ItemPictureResponse[];
+  options: ItemOptionResponse[];
   categories?: string[];
   like: boolean;
   reviews: ReviewResponse[];

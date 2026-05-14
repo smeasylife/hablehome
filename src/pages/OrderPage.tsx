@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin, PackageCheck, Search, WalletCards } from "lucide-react";
 import axios from "axios";
+import { resolveApiAssetUrl } from "../api/client";
 import { createOrder } from "../api/orders";
 import { requestPayment } from "../api/payments";
 import { useCurrentMember } from "../hooks/useCurrentMember";
@@ -270,7 +271,7 @@ export function OrderPage() {
                   <div className="aspect-square overflow-hidden rounded-md bg-soft">
                     {item.pictureUrl ? (
                       <img
-                        src={item.pictureUrl}
+                        src={resolveApiAssetUrl(item.pictureUrl)}
                         alt={item.name}
                         className="h-full w-full object-cover"
                       />

@@ -1,5 +1,7 @@
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Heart,
   Minus,
   Plus,
@@ -13,6 +15,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addCartItem } from "../api/cart";
+import { resolveApiAssetUrl } from "../api/client";
 import { getItem, likeItem, unlikeItem } from "../api/items";
 import { ProductReviews } from "../components/ProductReviews";
 import { ProductQuestions } from "../components/ProductQuestions";
@@ -21,7 +24,6 @@ import type { ItemDetailResponse, ItemListResponse } from "../types/item";
 import type { OrderPageState } from "../types/order";
 
 const currencyFormatter = new Intl.NumberFormat("ko-KR");
-const DEFAULT_COLORS = ["White", "Ivory", "Gray", "Beige", "Blue", "Charcoal"];
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "2-digit",
@@ -38,6 +40,11 @@ function formatDate(value: string) {
   return dateFormatter.format(date);
 }
 
+function formatAdditionalPrice(additionalPrice?: number) {
+  const price = additionalPrice ?? 0;
+  return price > 0 ? `+${currencyFormatter.format(price)}원` : "";
+}
+
 export function ProductDetailPage() {
   const { itemId } = useParams();
   const navigate = useNavigate();
@@ -50,6 +57,7 @@ export function ProductDetailPage() {
   const [cartMessage, setCartMessage] = useState("");
   const [likeMessage, setLikeMessage] = useState("");
   const [selectedSectionId, setSelectedSectionId] = useState("info");
+  const [selectedPictureIndex, setSelectedPictureIndex] = useState(0);
   const infoSectionRef = useRef<HTMLElement | null>(null);
   const reviewSectionRef = useRef<HTMLElement | null>(null);
   const qnaSectionRef = useRef<HTMLElement | null>(null);
@@ -64,28 +72,46 @@ export function ProductDetailPage() {
 
   const product = data;
   const reviews = product?.reviews ?? [];
-  const mainPicture = product?.itemPictures[0]?.url ?? "";
+  const pictureUrls = product?.itemPictures.map((picture) => resolveApiAssetUrl(picture.url)) ?? [];
+  const mainPicture = pictureUrls[selectedPictureIndex] ?? pictureUrls[0] ?? "";
+  const optionItems = product?.options ?? [];
   const colorOptions = useMemo(() => {
-    if (!product) {
-      return DEFAULT_COLORS;
-    }
-
-    return Array.from(new Set([product.color, ...DEFAULT_COLORS].filter(Boolean)));
-  }, [product]);
-  const sizeOptions = useMemo(() => {
     if (!product) {
       return [];
     }
 
-    return product.size
-      .split("/")
-      .map((size) => size.trim())
-      .filter(Boolean);
+    return Array.from(new Set(optionItems.map((option) => option.color).filter(Boolean)));
   }, [product]);
-  const subtotal = product ? product.salePrice * quantity : 0;
+  const sizeOptions = useMemo(() => {
+    if (!product || !selectedColor) {
+      return [];
+    }
+
+    return optionItems
+      .filter((option) => option.color === selectedColor)
+      .map((option) => option.size);
+  }, [product, selectedColor, optionItems]);
+  const firstAvailableOption = useMemo(
+    () => optionItems.find((option) => !option.soldOut),
+    [optionItems],
+  );
+  const selectedOption = useMemo(
+    () =>
+      optionItems.find(
+        (option) => option.color === selectedColor && option.size === selectedSize,
+      ),
+    [optionItems, selectedColor, selectedSize],
+  );
+  const canPurchaseSelectedOption = Boolean(selectedOption && !selectedOption.soldOut);
+  const selectedAdditionalPrice = selectedOption?.additionalPrice ?? 0;
+  const selectedListPrice = product ? product.price + selectedAdditionalPrice : 0;
+  const selectedUnitPrice = product
+    ? product.salePrice + selectedAdditionalPrice
+    : 0;
+  const subtotal = selectedUnitPrice * quantity;
   const discountRate =
-    product && product.price > product.salePrice
-      ? Math.round(((product.price - product.salePrice) / product.price) * 100)
+    product && selectedListPrice > selectedUnitPrice
+      ? Math.round(((selectedListPrice - selectedUnitPrice) / selectedListPrice) * 100)
       : 0;
 
   const addCartMutation = useMutation({
@@ -162,11 +188,16 @@ export function ProductDetailPage() {
       return;
     }
 
+    if (!canPurchaseSelectedOption) {
+      setCartMessage("구매 가능한 옵션을 선택해 주세요.");
+      return;
+    }
+
     setCartMessage("");
     addCartMutation.mutate({
       itemId: product.itemId,
-      color: product.color,
-      size: product.size,
+      color: selectedColor,
+      size: selectedSize,
       quantity: 1,
     });
   };
@@ -193,14 +224,75 @@ export function ProductDetailPage() {
     });
   };
 
+  useEffect(() => {
+    if (!product) {
+      return;
+    }
+
+    const hasSelectedOption = optionItems.some(
+      (option) => option.color === selectedColor && option.size === selectedSize,
+    );
+    if (hasSelectedOption) {
+      return;
+    }
+
+    if (firstAvailableOption) {
+      setSelectedColor(firstAvailableOption.color);
+      setSelectedSize(firstAvailableOption.size);
+      return;
+    }
+
+    setSelectedColor(colorOptions[0] || "");
+    setSelectedSize("");
+  }, [product, optionItems, selectedColor, selectedSize, firstAvailableOption, colorOptions]);
+
+  useEffect(() => {
+    if (!selectedOption) {
+      return;
+    }
+
+    setQuantity((current) =>
+      Math.min(Math.max(1, current), Math.max(1, selectedOption.stockQuantity)),
+    );
+  }, [selectedOption]);
+
+  useEffect(() => {
+    if (!selectedColor) {
+      return;
+    }
+
+    const sameColorOptions = optionItems.filter((option) => option.color === selectedColor);
+    if (sameColorOptions.some((option) => option.size === selectedSize)) {
+      return;
+    }
+
+    const nextOption = sameColorOptions.find((option) => !option.soldOut) ?? sameColorOptions[0];
+    setSelectedSize(nextOption?.size ?? "");
+  }, [optionItems, selectedColor, selectedSize]);
+
+  useEffect(() => {
+    setSelectedPictureIndex(0);
+  }, [product?.itemId]);
+
+  useEffect(() => {
+    if (selectedPictureIndex >= pictureUrls.length) {
+      setSelectedPictureIndex(Math.max(0, pictureUrls.length - 1));
+    }
+  }, [pictureUrls.length, selectedPictureIndex]);
+
   const openPurchaseModal = () => {
     if (!product) {
       return;
     }
 
-    setSelectedColor((current) => current || product.color || colorOptions[0] || "");
-    setSelectedSize((current) => current || sizeOptions[0] || product.size || "");
-    setQuantity((current) => Math.max(1, current));
+    if (!canPurchaseSelectedOption) {
+      setPurchaseError("구매 가능한 옵션을 선택해 주세요.");
+      return;
+    }
+
+    setQuantity((current) =>
+      Math.min(Math.max(1, current), selectedOption?.stockQuantity ?? 1),
+    );
     setPurchaseError("");
     setPurchaseModalOpen(true);
   };
@@ -210,8 +302,12 @@ export function ProductDetailPage() {
       return;
     }
 
-    if (!selectedColor || !selectedSize) {
-      setPurchaseError("색상과 사이즈를 선택해 주세요.");
+    if (!canPurchaseSelectedOption) {
+      setPurchaseError("구매 가능한 옵션을 선택해 주세요.");
+      return;
+    }
+    if (selectedOption && quantity > selectedOption.stockQuantity) {
+      setPurchaseError("선택한 옵션의 재고 수량을 초과했습니다.");
       return;
     }
 
@@ -231,8 +327,8 @@ export function ProductDetailPage() {
           color: selectedColor,
           size: selectedSize,
           quantity,
-          unitPrice: product.salePrice,
-          pictureUrl: product.itemPictures[0]?.url ?? "",
+          unitPrice: selectedUnitPrice,
+          pictureUrl: resolveApiAssetUrl(product.itemPictures[0]?.url),
         },
       ],
     };
@@ -321,26 +417,64 @@ export function ProductDetailPage() {
         <>
           <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:gap-12">
             <div className="space-y-3">
-              <div className="aspect-square overflow-hidden rounded-lg bg-soft">
-                <img
-                  src={mainPicture}
-                  alt={product.name}
-                  className="h-full w-full object-cover"
-                />
+              <div className="relative aspect-[4/5] overflow-hidden rounded-lg bg-soft">
+                {mainPicture ? (
+                  <img
+                    src={mainPicture}
+                    alt={product.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : null}
+                {pictureUrls.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedPictureIndex((current) =>
+                          current === 0 ? pictureUrls.length - 1 : current - 1,
+                        )
+                      }
+                      className="absolute left-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-soft"
+                      aria-label="이전 이미지"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedPictureIndex((current) =>
+                          current === pictureUrls.length - 1 ? 0 : current + 1,
+                        )
+                      }
+                      className="absolute right-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-soft"
+                      aria-label="다음 이미지"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                    <div className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
+                      {selectedPictureIndex + 1} / {pictureUrls.length}
+                    </div>
+                  </>
+                ) : null}
               </div>
-              {product.itemPictures.length > 1 ? (
-                <div className="grid grid-cols-4 gap-3">
-                  {product.itemPictures.slice(0, 4).map((picture, index) => (
-                    <div
-                      key={`${picture.url}-${index}`}
-                      className="aspect-square overflow-hidden rounded-md bg-soft"
+              {pictureUrls.length > 1 ? (
+                <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                  {pictureUrls.map((pictureUrl, index) => (
+                    <button
+                      type="button"
+                      key={`${pictureUrl}-${index}`}
+                      onClick={() => setSelectedPictureIndex(index)}
+                      className={`aspect-[4/5] overflow-hidden rounded-md border bg-soft ${
+                        selectedPictureIndex === index ? "border-ink" : "border-transparent"
+                      }`}
+                      aria-label={`${index + 1}번째 이미지 보기`}
                     >
                       <img
-                        src={picture.url}
+                        src={pictureUrl}
                         alt={`${product.name} ${index + 1}`}
                         className="h-full w-full object-cover"
                       />
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : null}
@@ -359,13 +493,18 @@ export function ProductDetailPage() {
                       {discountRate}%
                     </span>
                     <span className="text-base text-muted line-through">
-                      {currencyFormatter.format(product.price)}원
+                      {currencyFormatter.format(selectedListPrice)}원
                     </span>
                   </>
                 ) : null}
                 <span className="text-2xl font-semibold text-ink">
-                  {currencyFormatter.format(product.salePrice)}원
+                  {currencyFormatter.format(selectedUnitPrice)}원
                 </span>
+                {selectedAdditionalPrice > 0 ? (
+                  <span className="text-sm font-medium text-muted">
+                    옵션 추가금 {formatAdditionalPrice(selectedAdditionalPrice)} 반영
+                  </span>
+                ) : null}
               </div>
 
               <dl className="mt-8 divide-y divide-hairline border-y border-hairline text-sm">
@@ -386,6 +525,92 @@ export function ProductDetailPage() {
                   <dd className="text-ink">{product.size}</dd>
                 </div>
               </dl>
+
+              <div className="mt-8 space-y-6">
+                <section>
+                  <h2 className="text-sm font-semibold text-ink">색상</h2>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {colorOptions.length > 0 ? (
+                      colorOptions.map((color) => {
+                        const soldOut = optionItems
+                          .filter((option) => option.color === color)
+                          .every((option) => option.soldOut);
+
+                        return (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => {
+                              setSelectedColor(color);
+                              setPurchaseError("");
+                              setCartMessage("");
+                            }}
+                            disabled={soldOut}
+                            className={`h-10 rounded-md border px-4 text-sm font-medium transition disabled:border-hairline disabled:bg-soft disabled:text-muted ${
+                              selectedColor === color
+                                ? "border-ink bg-ink text-white"
+                                : "border-hairline bg-white text-body hover:border-ink"
+                            }`}
+                          >
+                            {color}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-muted">등록된 판매 옵션이 없습니다.</p>
+                    )}
+                  </div>
+                </section>
+
+                {selectedColor ? (
+                  <section>
+                    <h2 className="text-sm font-semibold text-ink">사이즈</h2>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {sizeOptions.map((size) => {
+                        const option = optionItems.find(
+                          (itemOption) =>
+                            itemOption.color === selectedColor && itemOption.size === size,
+                        );
+
+                        return (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSize(size);
+                              setPurchaseError("");
+                              setCartMessage("");
+                            }}
+                            disabled={!option || option.soldOut}
+                            className={`min-h-14 rounded-md border px-2 py-2 text-sm font-semibold transition disabled:border-hairline disabled:bg-soft disabled:text-muted ${
+                              selectedSize === size
+                                ? "border-ink bg-ink text-white"
+                                : "border-hairline bg-white text-body hover:border-ink"
+                            }`}
+                          >
+                            <span className="block">{size}</span>
+                            {option && option.additionalPrice > 0 ? (
+                              <span className="mt-0.5 block text-[11px] font-medium">
+                                {formatAdditionalPrice(option.additionalPrice)}
+                              </span>
+                            ) : null}
+                            {option?.soldOut ? (
+                              <span className="mt-0.5 block text-[11px] font-medium">품절</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedOption ? (
+                      <p className="mt-2 text-sm text-muted">
+                        {selectedOption.soldOut
+                          ? "선택한 옵션은 품절입니다."
+                          : `남은 수량 ${selectedOption.stockQuantity}개`}
+                      </p>
+                    ) : null}
+                  </section>
+                ) : null}
+              </div>
 
               <div className="mt-8 grid grid-cols-[52px_1fr] gap-3">
                 <button
@@ -408,8 +633,8 @@ export function ProductDetailPage() {
                 <button
                   type="button"
                   onClick={handleAddCart}
-                  disabled={addCartMutation.isPending}
-                  className="flex h-[52px] min-h-[52px] items-center justify-center gap-2 rounded-md bg-ink px-5 text-sm font-semibold text-white"
+                  disabled={addCartMutation.isPending || !canPurchaseSelectedOption}
+                  className="flex h-[52px] min-h-[52px] items-center justify-center gap-2 rounded-md bg-ink px-5 text-sm font-semibold text-white disabled:bg-muted"
                 >
                   <ShoppingCart size={18} />
                   {addCartMutation.isPending ? "담는 중" : "장바구니 담기"}
@@ -428,7 +653,8 @@ export function ProductDetailPage() {
               <button
                 type="button"
                 onClick={openPurchaseModal}
-                className="mt-3 flex h-[52px] min-h-[52px] w-full items-center justify-center gap-2 rounded-md bg-accent px-5 text-sm font-semibold text-white"
+                disabled={!canPurchaseSelectedOption}
+                className="mt-3 flex h-[52px] min-h-[52px] w-full items-center justify-center gap-2 rounded-md bg-accent px-5 text-sm font-semibold text-white disabled:bg-muted"
               >
                 <ShoppingBag size={18} />
                 바로 구매
@@ -461,6 +687,19 @@ export function ProductDetailPage() {
                 <p className="mt-5 max-w-4xl whitespace-pre-line leading-7 text-body">
                   {product.information}
                 </p>
+                {pictureUrls.length > 0 ? (
+                  <div className="mt-8 max-w-4xl space-y-4">
+                    {pictureUrls.map((pictureUrl, index) => (
+                      <img
+                        key={`${pictureUrl}-detail-${index}`}
+                        src={pictureUrl}
+                        alt={`${product.name} 상세 이미지 ${index + 1}`}
+                        className="w-full rounded-md bg-soft object-cover"
+                        loading="lazy"
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </article>
 
               <section
@@ -520,7 +759,10 @@ export function ProductDetailPage() {
                             setSelectedColor(color);
                             setPurchaseError("");
                           }}
-                          className={`h-10 rounded-md border px-4 text-sm font-medium transition ${
+                          disabled={optionItems
+                            .filter((option) => option.color === color)
+                            .every((option) => option.soldOut)}
+                          className={`h-10 rounded-md border px-4 text-sm font-medium transition disabled:border-hairline disabled:bg-soft disabled:text-muted ${
                             selectedColor === color
                               ? "border-ink bg-ink text-white"
                               : "border-hairline bg-white text-body hover:border-ink"
@@ -535,23 +777,39 @@ export function ProductDetailPage() {
                   <section>
                     <h3 className="text-sm font-semibold text-ink">사이즈</h3>
                     <div className="mt-3 grid grid-cols-3 gap-2">
-                      {sizeOptions.map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSize(size);
-                            setPurchaseError("");
-                          }}
-                          className={`h-11 rounded-md border text-sm font-semibold transition ${
-                            selectedSize === size
-                              ? "border-ink bg-ink text-white"
-                              : "border-hairline bg-white text-body hover:border-ink"
-                          }`}
-                        >
-                          {size}
-                        </button>
-                      ))}
+                      {sizeOptions.map((size) => {
+                        const option = optionItems.find(
+                          (itemOption) =>
+                            itemOption.color === selectedColor && itemOption.size === size,
+                        );
+
+                        return (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSize(size);
+                              setPurchaseError("");
+                            }}
+                            disabled={!option || option.soldOut}
+                            className={`min-h-14 rounded-md border px-2 py-2 text-sm font-semibold transition disabled:border-hairline disabled:bg-soft disabled:text-muted ${
+                              selectedSize === size
+                                ? "border-ink bg-ink text-white"
+                                : "border-hairline bg-white text-body hover:border-ink"
+                            }`}
+                          >
+                            <span className="block">{size}</span>
+                            {option && option.additionalPrice > 0 ? (
+                              <span className="mt-0.5 block text-[11px] font-medium">
+                                {formatAdditionalPrice(option.additionalPrice)}
+                              </span>
+                            ) : null}
+                            {option?.soldOut ? (
+                              <span className="mt-0.5 block text-[11px] font-medium">품절</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
                     </div>
                   </section>
 
@@ -559,7 +817,7 @@ export function ProductDetailPage() {
                     <div>
                       <h3 className="text-sm font-semibold text-ink">수량</h3>
                       <p className="mt-1 text-sm text-muted">
-                        {currencyFormatter.format(product.salePrice)}원 / 개
+                        {currencyFormatter.format(selectedUnitPrice)}원 / 개
                       </p>
                     </div>
                     <div className="flex h-10 items-center rounded-full border border-hairline">
@@ -575,8 +833,13 @@ export function ProductDetailPage() {
                       <span className="w-10 text-center text-sm font-semibold">{quantity}</span>
                       <button
                         type="button"
-                        onClick={() => setQuantity((current) => current + 1)}
+                        onClick={() =>
+                          setQuantity((current) =>
+                            Math.min(selectedOption?.stockQuantity ?? current, current + 1),
+                          )
+                        }
                         className="flex size-10 items-center justify-center text-ink"
+                        disabled={quantity >= (selectedOption?.stockQuantity ?? 1)}
                         aria-label="수량 늘리기"
                       >
                         <Plus size={16} />

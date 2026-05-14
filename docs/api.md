@@ -9,7 +9,7 @@
 - timeout: 5초. 단, 회원가입 인증번호 발송은 30초
 - 인증 방식: Spring Security 세션 쿠키 `JSESSIONID`, `withCredentials: true`
 - CSRF: `POST`, `PUT`, `PATCH`, `DELETE` 요청 전에 `GET /auth/csrf`를 호출하고 응답의 `headerName`에 `token`을 넣음
-- 403 응답을 받으면 캐시된 CSRF 토큰을 초기화함
+- CSRF 실패 처리: `403` 응답이면서 `code`가 `CSRF_TOKEN_INVALID`일 때만 캐시된 CSRF 토큰을 초기화하고 새 토큰으로 원 요청을 1회 재시도함
 
 ## 에러 형식
 
@@ -19,9 +19,12 @@
 {
   "success": false,
   "data": null,
+  "code": "CSRF_TOKEN_INVALID",
   "message": "오류 메시지"
 }
 ```
+
+`code`는 선택 필드입니다. 일반 비즈니스 에러에는 없을 수 있으며, CSRF 토큰 누락/불일치처럼 프론트가 분기해야 하는 오류에 사용합니다.
 
 프론트에서는 주로 Axios 에러의 `response.data.message`를 사용자 메시지로 사용합니다.
 

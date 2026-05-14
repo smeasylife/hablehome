@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { LogOut, Package, PenSquare, UserRound } from "lucide-react";
 import { PurchaseReviewComposer } from "../components/PurchaseReviewComposer";
 import { logout } from "../api/auth";
+import { resolveApiAssetUrl } from "../api/client";
 import { getOrders } from "../api/orders";
 import { getMemberReviews } from "../data/localReviews";
 import { clearSession } from "../data/localSession";
@@ -147,7 +148,7 @@ export function MyPage() {
                   <div className="aspect-square overflow-hidden rounded-md bg-soft">
                     {purchase.pictureUrl ? (
                       <img
-                        src={purchase.pictureUrl}
+                        src={resolveApiAssetUrl(purchase.pictureUrl)}
                         alt={purchase.name}
                         className="h-full w-full object-cover"
                       />

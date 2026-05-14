@@ -6,8 +6,11 @@ export type CartItemResponse = {
   salePrice: number;
   color: string;
   size: string;
+  additionalPrice: number;
   quantity: number;
   pictureUrl: string;
+  stockQuantity: number;
+  available: boolean;
 };
 
 export type CartItemRequest = {

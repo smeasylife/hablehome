@@ -31,6 +31,7 @@ export function getLocalCartItems() {
 
 export function addLocalCartItem(product: ItemDetailResponse) {
   const items = readStorage();
+  const option = product.options.find((itemOption) => !itemOption.soldOut);
 
   if (items.some((item) => item.itemId === product.itemId)) {
     return;
@@ -41,12 +42,15 @@ export function addLocalCartItem(product: ItemDetailResponse) {
       cartId: Date.now(),
       itemId: product.itemId,
       name: product.name,
-      price: product.price,
-      salePrice: product.salePrice,
-      color: product.color,
-      size: product.size,
+      price: product.price + (option?.additionalPrice ?? 0),
+      salePrice: product.salePrice + (option?.additionalPrice ?? 0),
+      color: option?.color ?? product.color,
+      size: option?.size ?? product.size,
+      additionalPrice: option?.additionalPrice ?? 0,
       quantity: 1,
       pictureUrl: product.itemPictures[0]?.url ?? "",
+      stockQuantity: option?.stockQuantity ?? 0,
+      available: Boolean(option && option.stockQuantity >= 1),
     },
     ...items,
   ]);

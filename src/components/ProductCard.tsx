@@ -1,5 +1,6 @@
 import { Heart } from "lucide-react";
 import { Link } from "react-router-dom";
+import { resolveApiAssetUrl } from "../api/client";
 import type { ItemListResponse } from "../types/item";
 
 type ProductCardProps = {
@@ -31,7 +32,7 @@ export function ProductCard({ product }: ProductCardProps) {
       <article className="overflow-hidden rounded-md border border-hairline bg-white transition group-hover:-translate-y-0.5">
         <div className="relative aspect-[4/5] overflow-hidden bg-soft">
           <img
-            src={product.pictureUrl}
+            src={resolveApiAssetUrl(product.pictureUrl)}
             alt={product.name}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
             loading="lazy"

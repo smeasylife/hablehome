@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 import { useState } from "react";
+import { resolveApiAssetUrl } from "../api/client";
 import { createReview } from "../api/items";
 import { addLocalReview } from "../data/localReviews";
 import {
@@ -83,7 +84,7 @@ export function PurchaseReviewComposer({
       <div className="flex items-start gap-4">
         <div className="size-20 overflow-hidden rounded-md bg-soft">
           <img
-            src={purchase.pictureUrl}
+            src={resolveApiAssetUrl(purchase.pictureUrl)}
             alt={purchase.name}
             className="h-full w-full object-cover"
           />

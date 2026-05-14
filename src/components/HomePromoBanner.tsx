@@ -1,61 +1,24 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-
-type PromoBanner = {
-  id: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  mobileImageUrl: string;
-  to: string;
-  ctaLabel: string;
-};
-
-const promoBanners: PromoBanner[] = [
-  {
-    id: "clean-cotton",
-    eyebrow: "New Arrival",
-    title: "하루 끝을 더 부드럽게",
-    description: "클린 코튼 차렵이불과 함께 침실의 계절감을 바꿔보세요.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1616627561950-9f746e330187?auto=format&fit=crop&w=1800&q=85",
-    mobileImageUrl:
-      "https://images.unsplash.com/photo-1616627561950-9f746e330187?auto=format&fit=crop&w=900&q=85",
-    to: "/items/1",
-    ctaLabel: "상품 보기",
-  },
-  {
-    id: "modal-stripe",
-    eyebrow: "Weekend Event",
-    title: "모달 침구 세트 특별가",
-    description: "차분한 스트라이프와 매끈한 촉감을 이번 주 혜택으로 만나보세요.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1631049035182-249067d7618e?auto=format&fit=crop&w=1800&q=85",
-    mobileImageUrl:
-      "https://images.unsplash.com/photo-1631049035182-249067d7618e?auto=format&fit=crop&w=900&q=85",
-    to: "/items/2",
-    ctaLabel: "이벤트 보기",
-  },
-  {
-    id: "goose-winter",
-    eyebrow: "Best Bedding",
-    title: "포근함이 오래 남는 침구",
-    description: "프리미엄 구스 이불로 침실에 깊은 휴식을 더하세요.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1615874694520-474822394e73?auto=format&fit=crop&w=1800&q=85",
-    mobileImageUrl:
-      "https://images.unsplash.com/photo-1615874694520-474822394e73?auto=format&fit=crop&w=900&q=85",
-    to: "/items/5",
-    ctaLabel: "베스트 보기",
-  },
-];
+import { getPromoBanners } from "../api/banners";
+import { resolveApiAssetUrl } from "../api/client";
 
 export function HomePromoBanner() {
   const [activeIndex, setActiveIndex] = useState(0);
+  const { data: promoBanners = [] } = useQuery({
+    queryKey: ["promo-banners"],
+    queryFn: getPromoBanners,
+  });
   const activeBanner = promoBanners[activeIndex] ?? promoBanners[0];
   const hasMultipleBanners = promoBanners.length > 1;
+
+  useEffect(() => {
+    if (activeIndex >= promoBanners.length) {
+      setActiveIndex(0);
+    }
+  }, [activeIndex, promoBanners.length]);
 
   const orderedBanners = useMemo(
     () =>
@@ -63,7 +26,7 @@ export function HomePromoBanner() {
         ...banner,
         selected: index === activeIndex,
       })),
-    [activeIndex],
+    [activeIndex, promoBanners],
   );
 
   const moveBanner = (direction: "previous" | "next") => {
@@ -83,9 +46,9 @@ export function HomePromoBanner() {
   return (
     <section className="relative isolate min-h-[420px] overflow-hidden bg-ink sm:min-h-[520px] lg:min-h-[620px]">
       <picture className="absolute inset-0 -z-20 block h-full w-full">
-        <source media="(min-width: 640px)" srcSet={activeBanner.imageUrl} />
+        <source media="(min-width: 640px)" srcSet={resolveApiAssetUrl(activeBanner.imageUrl)} />
         <img
-          src={activeBanner.mobileImageUrl}
+          src={resolveApiAssetUrl(activeBanner.imageUrl)}
           alt=""
           className="h-full w-full object-cover"
         />
@@ -93,21 +56,20 @@ export function HomePromoBanner() {
       <div className="absolute inset-0 -z-10 bg-black/35" />
 
       <div className="mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-12 pt-16 text-white sm:min-h-[520px] sm:px-6 sm:pb-16 lg:min-h-[620px]">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">
-          {activeBanner.eyebrow}
-        </p>
         <h2 className="mt-3 max-w-3xl text-[34px] font-semibold leading-tight sm:text-[48px] lg:text-[58px]">
-          {activeBanner.title}
+          {activeBanner.largeText}
         </h2>
         <p className="mt-4 max-w-xl text-base leading-7 text-white/82 sm:text-lg">
-          {activeBanner.description}
+          {activeBanner.smallText}
         </p>
-        <Link
-          to={activeBanner.to}
-          className="mt-7 flex h-11 w-fit items-center justify-center rounded-md bg-white px-5 text-sm font-semibold text-ink transition hover:bg-white/90"
-        >
-          {activeBanner.ctaLabel}
-        </Link>
+        {activeBanner.linkUrl ? (
+          <Link
+            to={activeBanner.linkUrl}
+            className="mt-7 flex h-11 w-fit items-center justify-center rounded-md bg-white px-5 text-sm font-semibold text-ink transition hover:bg-white/90"
+          >
+            {activeBanner.buttonLabel}
+          </Link>
+        ) : null}
       </div>
 
       {hasMultipleBanners ? (
