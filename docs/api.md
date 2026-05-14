@@ -5,7 +5,7 @@
 ## 공통 클라이언트
 
 - API 클라이언트: `src/api/client.ts`
-- 기본 URL: `VITE_API_BASE_URL`, 미설정 시 `http://localhost:8080`
+- 기본 URL: `VITE_API_BASE_URL`, 미설정 시 `https://hablehome.store/`
 - timeout: 5초. 단, 회원가입 인증번호 발송은 30초
 - 인증 방식: Spring Security 세션 쿠키 `JSESSIONID`, `withCredentials: true`
 - CSRF: `POST`, `PUT`, `PATCH`, `DELETE` 요청 전에 `GET /auth/csrf`를 호출하고 응답의 `headerName`에 `token`을 넣음

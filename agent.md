@@ -38,7 +38,7 @@ npm run preview
 
 | 변수 | 용도 | 기본값/비고 |
 |---|---|---|
-| `VITE_API_BASE_URL` | 백엔드 API base URL | 미설정 시 `http://localhost:8080` |
+| `VITE_API_BASE_URL` | 백엔드 API base URL | 미설정 시 `https://hablehome.store/` |
 | `VITE_KAKAO_REST_API_KEY` | 카카오 로그인 REST API 키 | 없으면 카카오 로그인 버튼에서 오류 표시 |
 | `VITE_TOSS_CLIENT_KEY` | Toss Payments 클라이언트 키 | 없으면 개발 완료 처리로 우회 |
 
